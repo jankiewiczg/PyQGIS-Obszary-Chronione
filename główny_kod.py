@@ -1,9 +1,11 @@
 from qgis.core import (
     QgsProject, QgsVectorLayer, QgsFeatureRequest,
     QgsDataSourceUri, QgsFeature, QgsGeometry,
-    QgsCoordinateReferenceSystem, QgsCoordinateTransform
+    QgsCoordinateReferenceSystem, QgsCoordinateTransform,
+    QgsField, QgsVectorDataProvider
 )
 from qgis.utils import iface  # Zapewnia dostęp do iface w nowszych wersjach
+from qgis.PyQt.QtCore import QVariant
 
 # Słownik dostępnych warstw w WFS GDOŚ
 TYPY_OBSZAROW = {
@@ -19,6 +21,18 @@ TYPY_OBSZAROW = {
 
 podsumowanie_konfig = "none?crs=epsg:2180&field=Nazwa:string&field=Typ:string&field=Powierzchnia:double&field=Odleglosc:double"
 podsumowanie = QgsVectorLayer(podsumowanie_konfig,"Podsumowanie","memory")
+
+# 1 opcja na zmianę nazwy kolumny (na obiekcie klasy QgsVector Layer)
+# podsumowanie.startEditing()
+# podsumowanie.renameAttribute(2, "Powierzchnia [m]")
+# podsumowanie.renameAttribute(3, "Odległość [m]")
+# podsumowanie.commitChanges()
+
+# 2 opcja na zmianę nazwy kolumny (na obiekcie klasy QgsVectorDataProvider)
+podsumowanie_dane = podsumowanie.dataProvider()
+podsumowanie_dane.renameAttributes({2: "Powierzchnia [m]",
+                                    3: "Odległość [m]"})
+podsumowanie.updateFields()
 
 def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
     """
@@ -49,6 +63,10 @@ def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
 
         # Kopiujemy strukturę tabeli
         dane_wynikowe.addAttributes(warstwa_wfs.fields())
+        dane_wynikowe.addAttributes([
+            QgsField("Powierzchnia [m]", QVariant.Double),
+            QgsField("Dystans [m]", QVariant.Double)
+        ])
         warstwa_wynikowa.updateFields()
 
         # 5. Tworzymy zapytanie przestrzenne (BBOX)
@@ -58,10 +76,14 @@ def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
         for obiekt_wfs in warstwa_wfs.getFeatures(zapytanie):
             nowy_obiekt = QgsFeature(warstwa_wynikowa.fields())
             nowy_obiekt.setGeometry(obiekt_wfs.geometry())
-            nowy_obiekt.setAttributes(obiekt_wfs.attributes())
+
+            pow = nowy_obiekt.geometry().area()
+            dyst = QgsGeometry.distance(nowy_obiekt.geometry(),geometria_sklejona)
+
+            nowy_obiekt.setAttributes(obiekt_wfs.attributes() + [pow, dyst])
             obiekty_do_skopiowania.append(nowy_obiekt)
 
-            uzupelnij_podsumowanie(nowy_obiekt, typ, geometria_sklejona, podsumowanie, 0)
+            uzupelnij_podsumowanie(nowy_obiekt, typ, pow, dyst, podsumowanie)
 
         # 6. Zapisujemy pobrane obiekty do warstwy tymczasowej
         dane_wynikowe.addFeatures(obiekty_do_skopiowania)
@@ -77,15 +99,13 @@ def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
         # po pętli będę ją dodawał
         return warstwa_wynikowa
 
-def uzupelnij_podsumowanie(obiekt, typ_obszaru, geometria_zrodlowa, tabela, indeks_tabeli):
-
-    dystans = QgsGeometry.distance(obiekt.geometry(),geometria_zrodlowa)
+def uzupelnij_podsumowanie(obiekt, typ_obszaru, powierzchnia, dystans, tabela):
 
     wiersz = QgsFeature(tabela.fields())  # tworzy pusty wiersz ze strukturą kolumn
     wiersz.setAttributes([
         obiekt["nazwa"],                # 0: Nazwa
         typ_obszaru,                    # 1: Typ
-        obiekt.geometry().area(),       # 2: Powierzchnia
+        powierzchnia,                   # 2: Powierzchnia
         dystans                         # 3: Odległość
     ])
     tabela.dataProvider().addFeature(wiersz)  # wstrzykuje wiersz
