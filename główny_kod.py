@@ -80,6 +80,9 @@ def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
             pow = nowy_obiekt.geometry().area()
             dyst = QgsGeometry.distance(nowy_obiekt.geometry(),geometria_sklejona)
 
+            if dyst > odleglosc:
+                continue
+
             nowy_obiekt.setAttributes(obiekt_wfs.attributes() + [pow, dyst])
             obiekty_do_skopiowania.append(nowy_obiekt)
 
