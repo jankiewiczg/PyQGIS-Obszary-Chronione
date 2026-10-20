@@ -186,12 +186,15 @@ class Przyklad:
                 action)
             self.iface.removeToolBarIcon(action)
 
+        if hasattr(self, 'dlg') and self.dlg:
+            self.dlg.close()
+
     def run(self):
         """Run method that performs all the real work"""
 
         # 1. Ten blok wykonuje się TYLKO RAZ, gdy wtyczka jest klikana po raz pierwszy.
         # To idealne miejsce na "przygotowanie biurka" (ustawienie filtrów i podpięcie przycisków).
-        if self.first_start == True:
+        if self.first_start == True or not self.dlg.isVisible():
             self.first_start = False
             self.dlg = PrzykladDialog()
 
@@ -211,17 +214,27 @@ class Przyklad:
             # ------------------------------------
 
         # 2. Pokazanie okna na ekranie
-        self.dlg.show()
+        #self.dlg.show()
+
+        # 2. Pokazanie okna i zarządzanie minimalizacją
+        if self.dlg.isMinimized():
+            self.dlg.showNormal()  # Przywraca zminimalizowane okno do normalnego rozmiaru
+
+        self.dlg.show()  # Gwarantuje widoczność okna
+        self.dlg.raise_()  # Wypycha okno graficznie na sam wierzch
+        self.dlg.activateWindow()  # Nadaje oknu "fokus" (miganie kursora, gotowość na kliknięcia)
 
         # 3. Zatrzymanie działania QGIS-a w oczekiwaniu na to, co zrobi użytkownik w oknie
-        result = self.dlg.exec_()
+        #result = self.dlg.exec_()
 
     def uruchom_obliczenia(self):
+
         # 1. ODCZYT DANYCH Z INTERFEJSU (z okna wtyczki)
         warstwa_wejsciowa = self.dlg.combo_warstwa_wejsciowa.currentLayer()
         odleglosc = self.dlg.spin_bufor.value() * 1000
         czy_dodac_warstwy = self.dlg.check_dodaj_warstwy.isChecked()
         czy_podsumowanie = self.dlg.check_generuj_podsumowanie.isChecked()
+        czy_przyciac = self.dlg.check_przytnij.isChecked()
 
         # 2. BUDOWANIE LISTY WYBRANYCH TYPÓW (na podstawie zaznaczonych checkboxów)
         #    Definiujesz powiązania (co zaznacza jaki typ)
@@ -252,6 +265,24 @@ class Przyklad:
             )
             return
 
+        if not czy_dodac_warstwy and not czy_podsumowanie:
+            self.iface.messageBar().pushMessage(
+                "Błąd",
+                "Wybierz co najmniej jedną akcję: Dodaj warstwy do projektu lub Generuj podsumowanie!",
+                level=Qgis.MessageLevel.Warning,
+                duration=5
+            )
+            return
+
+        if czy_przyciac and not czy_dodac_warstwy:
+            self.iface.messageBar().pushMessage(
+                "Błąd",
+                "Wybrano przycięcie, ale nie zaznaczono opcji dodawania warstw do projektu. Zaznacz 'Dodaj warstwy...', aby móc przyciąć wyniki.",
+                level=Qgis.MessageLevel.Warning,
+                duration=6
+            )
+            return
+
         if warstwa_wejsciowa.type() != Qgis.LayerType.Vector:
             self.iface.messageBar().pushMessage(
                 "Błąd",
@@ -278,6 +309,8 @@ class Przyklad:
                 duration=5
             )
             return
+
+        self.dlg.push_uruchom.setEnabled(False)
 
         # Komunikat informacyjny (zielony/niebieski), że wszystko jest OK i startujemy
         self.iface.messageBar().pushMessage(
@@ -312,11 +345,11 @@ class Przyklad:
 
             # 2 opcja na zmianę nazwy kolumny (na obiekcie klasy QgsVectorDataProvider)
             podsumowanie_dane = podsumowanie.dataProvider()
-            podsumowanie_dane.renameAttributes({2: "Powierzchnia [m2]",
+            podsumowanie_dane.renameAttributes({2: "Powierzchnia [ha]",
                                                 3: "Odległość [m]"})
             podsumowanie.updateFields()
 
-        def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, nazwa_czytelna):
+        def pobierz_warstwy_wfs(nazwa_typu_wfs, zasieg, bufor, nazwa_czytelna):
             """
             Pobiera obiekty z WFS GDOŚ dla podanego typu obszaru chroniego i zasięgu BBOX.
             Zwraca i dodaje do projektu warstwę z obszarami.
@@ -346,7 +379,7 @@ class Przyklad:
                 # Kopiujemy strukturę tabeli
                 dane_wynikowe.addAttributes(warstwa_wfs.fields())
                 dane_wynikowe.addAttributes([
-                    QgsField("Powierzchnia [m]", QVariant.Double),
+                    QgsField("Powierzchnia [ha]", QVariant.Double),
                     QgsField("Dystans [m]", QVariant.Double)
                 ])
                 warstwa_wynikowa.updateFields()
@@ -356,10 +389,18 @@ class Przyklad:
 
                 obiekty_do_skopiowania = []
                 for obiekt_wfs in warstwa_wfs.getFeatures(zapytanie):
-                    nowy_obiekt = QgsFeature(warstwa_wynikowa.fields())
-                    nowy_obiekt.setGeometry(obiekt_wfs.geometry())
+                    geom_oryginalna = obiekt_wfs.geometry()
 
-                    pow = nowy_obiekt.geometry().area()
+                    if czy_przyciac:
+                        geom_oryginalna = geom_oryginalna.intersection(bufor)
+
+                        if geom_oryginalna.isEmpty():
+                            continue
+
+                    nowy_obiekt = QgsFeature(warstwa_wynikowa.fields())
+                    nowy_obiekt.setGeometry(geom_oryginalna)
+
+                    pow = nowy_obiekt.geometry().area() / 10000
                     dyst = nowy_obiekt.geometry().distance(geometria_sklejona)
 
                     if dyst > odleglosc:
@@ -418,8 +459,10 @@ class Przyklad:
                 geometria_sklejona = geometria_sklejona.combine(geom)
 
         # I teraz BBOX (zasięg) bierzemy po prostu z naszej nowej, połączonej geometrii!
+        bufor = geometria_sklejona.buffer(odleglosc,5)
         zasieg = geometria_sklejona.boundingBox()
         zasieg.grow(odleglosc)
+
 
         print(
             f"Zasięg zapytania EPSG:2180: X({zasieg.xMinimum():.2f} - {zasieg.xMaximum():.2f}), Y({zasieg.yMinimum():.2f} - {zasieg.yMaximum():.2f})")
@@ -430,9 +473,11 @@ class Przyklad:
             print(f"Pobieranie: {typ}...")
             kod_wfs = TYPY_OBSZAROW[typ]  # odwołanie do słownika na początku
 
-            obiekty = pobierz_warstwy_wfs(kod_wfs, zasieg, typ)
+            obiekty = pobierz_warstwy_wfs(kod_wfs, zasieg, bufor, typ)
             if obiekty:
                 wszystkie_pobrane_obiekty[typ] = obiekty
+
+        self.dlg.push_uruchom.setEnabled(True)
 
         if wszystkie_pobrane_obiekty:
             # Sukces - coś pobraliśmy
