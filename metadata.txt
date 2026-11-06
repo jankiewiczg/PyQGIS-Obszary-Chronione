@@ -5,7 +5,7 @@
 [general]
 name=Obszary Chronione
 qgisMinimumVersion=3.0
-description=Wtyczka pozwala na pobranie wektorowych warstw obszarów chronionych z serwera WFS GDOŚ.
+description=Wtyczka służy do pobierania warstw obszarów chronionych z serwera WFS GDOŚ. EN: This plugin is used to download protected area layers in Poland from the GDOŚ WFS server.
 version=0.1
 author=Jakub Jankiewicz
 email=jankiewicz890@gmail.com
