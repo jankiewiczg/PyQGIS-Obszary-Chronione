@@ -33,7 +33,8 @@ from qgis.core import (
             Qgis, QgsProject, QgsVectorLayer, QgsFeatureRequest,
             QgsDataSourceUri, QgsFeature, QgsGeometry,
             QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsField, QgsVectorDataProvider, QgsFillSymbol, QgsVectorFileWriter
+            QgsField, QgsVectorDataProvider, QgsFillSymbol, QgsVectorFileWriter,
+            QgsMapLayer, QgsMapLayerProxyModel, QgsWkbTypes
         )
 from qgis.PyQt.QtCore import QVariant
 
@@ -212,14 +213,20 @@ class ObszaryChronione:
 
         if self.first_start == True or not self.dlg.isVisible():
             self.first_start = False
-            self.dlg = ObszaryChronioneDialog()
+            self.dlg = ObszaryChronioneDialog(self.iface.mainWindow())
 
             # Ustawienie możliwych formatów dla warstwy wejściowej
-            self.dlg.combo_warstwa_wejsciowa.setFilters(
-                Qgis.LayerFilter.PointLayer |
-                Qgis.LayerFilter.LineLayer |
-                Qgis.LayerFilter.PolygonLayer
-            )
+            try:
+                filtry = (Qgis.LayerFilter.PointLayer |
+                          Qgis.LayerFilter.LineLayer |
+                          Qgis.LayerFilter.PolygonLayer)
+            except AttributeError:
+                # Dla starszych wersji QGIS (<3.34)
+                filtry = (QgsMapLayerProxyModel.PointLayer |
+                          QgsMapLayerProxyModel.LineLayer |
+                          QgsMapLayerProxyModel.PolygonLayer)
+
+            self.dlg.combo_warstwa_wejsciowa.setFilters(filtry)
 
             self.dlg.push_uruchom.clicked.connect(self.uruchom_obliczenia)
             self.dlg.filewidget_folder.fileChanged.connect(self.aktualizuj_przyciski_radio)
@@ -279,7 +286,13 @@ class ObszaryChronione:
             )
             return
 
-        if warstwa_wejsciowa.type() != Qgis.LayerType.Vector:
+        try:
+            is_vector = (warstwa_wejsciowa.type() == Qgis.LayerType.Vector)
+        except AttributeError:
+            # W przypadku starszej wersji QGIS (< 3.30)
+            is_vector = (warstwa_wejsciowa.type() == QgsMapLayer.VectorLayer)
+
+        if not is_vector:
             self.iface.messageBar().pushMessage(
                 "Błąd",
                 "Wybrana warstwa to raster, proszę wskazać warstwę wektorową.",
@@ -384,9 +397,18 @@ class ObszaryChronione:
                 # Dynamiczne dopasowanie typu geometrii
                 rodzaj_geom = warstwa_wfs.geometryType()
 
-                if rodzaj_geom == Qgis.GeometryType.Point:
+                try:
+                    # QGIS >= 3.30
+                    is_point = (rodzaj_geom == Qgis.GeometryType.Point)
+                    is_line = (rodzaj_geom == Qgis.GeometryType.Line)
+                except AttributeError:
+                    # QGIS < 3.30
+                    is_point = (rodzaj_geom == QgsWkbTypes.PointGeometry)
+                    is_line = (rodzaj_geom == QgsWkbTypes.LineGeometry)
+
+                if is_point:
                     typ_geom_str = "MultiPoint"
-                elif rodzaj_geom == Qgis.GeometryType.Line:
+                elif is_line:
                     typ_geom_str = "MultiLineString"
                 else:
                     typ_geom_str = "MultiPolygon"

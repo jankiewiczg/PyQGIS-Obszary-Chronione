@@ -4,9 +4,9 @@
 
 [general]
 name=Obszary Chronione
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.10
 description=Wtyczka służy do pobierania warstw obszarów chronionych z serwera WFS GDOŚ. EN: This plugin is used to download protected area layers in Poland from the GDOŚ WFS server.
-version=0.1
+version=0.2
 author=Jakub Jankiewicz
 email=jankiewicz890@gmail.com
 
@@ -22,7 +22,10 @@ repository=https://github.com/jankiewiczg/PyQGIS-Obszary-Chronione
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
 changelog=
-  Wersja 0.1 - Pierwsza testowa wersja wtyczki
+  Wersja 0.2
+  * Naprawa błędów w wyświetlaniu interfejsu
+  * Dodanie kompatybilności ze starszymi wersjami programu
+#  Wersja 0.1 - Pierwsza testowa wersja wtyczki
 
 # Tags are comma separated with spaces allowed
 tags=python, poland, nature
