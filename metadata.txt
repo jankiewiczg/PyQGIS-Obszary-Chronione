@@ -5,13 +5,15 @@
 [general]
 name=Obszary Chronione
 qgisMinimumVersion=3.10
-description=Wtyczka służy do pobierania warstw obszarów chronionych z serwera WFS GDOŚ. EN: This plugin is used to download protected area layers in Poland from the GDOŚ WFS server.
-version=0.2
+description=Wtyczka służąca do pobierania warstw obszarów chronionych z serwera WFS GDOŚ. EN: Download layers of protected areas in Poland from the GDOŚ WFS server.
+version=0.3
 author=Jakub Jankiewicz
 email=jankiewicz890@gmail.com
 
 about=Wtyczka pozwala na pobieranie wektorowych warstw obszarów chronionych z serwera WFS GDOŚ w obrębie wskazanej warstwy wejściowej, opcjonalnie powiększonej o bufor.
-  Dane można dodać do projektu jako warstwy tymczasowe lub zapisać na dysku w formacie Shapefile bądź GeoPackage. Narzędzie umożliwia również wygenerowanie tabeli z listą obszarów chronionych znajdujących się na danym obszarze.
+  Dane można dodać do projektu jako warstwy tymczasowe lub zapisać na dysku w formacie Shapefile bądź GeoPackage, automatycznie dodając je do projektu. Narzędzie umożliwia również wygenerowanie tabeli z listą obszarów chronionych znajdujących się na danym obszarze. Dla każdego z pobranych obiektów w locie liczona jest powierzchnia w hektarach oraz odległość od warstwy wejściowej (uwzględniając bufor).
+  Domyślnym układem współrzędnych danych wyjściowych jest układ 1992 (EPSG:2180), który odpowiada danym z serwera WFS. Warstwa wejściowa w innym formacie zostanie przeliczona przed pobieraniem danych.
+  Przy wyborze Shapefile jako formatu wyjściowego, w folderze docelowym pliki warstw zapisują się pod nazwami odpowiadającym typom obszarów chronionych. Przy wyborze Geopackage warstwy zapisują się w jednym pliku "Obszary_Chronione". Jeśli we wskazanym folderze znajdują się już pliki o tych samych nazwach, nowe pliki zostaną zapisane z sufiksem.
 
 tracker=https://github.com/jankiewiczg/PyQGIS-Obszary-Chronione/issues
 repository=https://github.com/jankiewiczg/PyQGIS-Obszary-Chronione
@@ -22,9 +24,12 @@ repository=https://github.com/jankiewiczg/PyQGIS-Obszary-Chronione
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
 changelog=
-  Wersja 0.2
-  * Naprawa błędów w wyświetlaniu interfejsu
-  * Dodanie kompatybilności ze starszymi wersjami programu
+  Wersja 0.3
+  * Usprawnienie interfejsu
+  * Rozbudowanie opisu wtyczki
+#  Wersja 0.2
+#  * Naprawa błędów w wyświetlaniu interfejsu
+#  * Dodanie kompatybilności ze starszymi wersjami programu
 #  Wersja 0.1 - Pierwsza testowa wersja wtyczki
 
 # Tags are comma separated with spaces allowed

@@ -33,7 +33,7 @@ from qgis.core import (
             Qgis, QgsProject, QgsVectorLayer, QgsFeatureRequest,
             QgsDataSourceUri, QgsFeature, QgsGeometry,
             QgsCoordinateReferenceSystem, QgsCoordinateTransform,
-            QgsField, QgsVectorDataProvider, QgsFillSymbol, QgsVectorFileWriter,
+            QgsField, QgsFillSymbol, QgsVectorFileWriter,
             QgsMapLayer, QgsMapLayerProxyModel, QgsWkbTypes
         )
 from qgis.PyQt.QtCore import QVariant
@@ -186,36 +186,19 @@ class ObszaryChronione:
                 action)
             self.iface.removeToolBarIcon(action)
 
-
-    def aktualizuj_przyciski_radio(self, sciezka):
-        """A function defining the visibility and accessibility of output file format radio buttons."""
-        ma_sciezke = bool(sciezka.strip())
-
-        # Dostępność przycisków zależna od obecności tekstu
-        self.dlg.radio_shp.setEnabled(ma_sciezke)
-        self.dlg.radio_gpkg.setEnabled(ma_sciezke)
-
-        # Ustawienie AutoExclusive
-        self.dlg.radio_shp.setAutoExclusive(ma_sciezke)
-        self.dlg.radio_gpkg.setAutoExclusive(ma_sciezke)
-
-        if ma_sciezke:
-            # Domyślnie zaznaczone shp po wpisaniu ścieżki
-            if not self.dlg.radio_shp.isChecked() and not self.dlg.radio_gpkg.isChecked():
-                self.dlg.radio_shp.setChecked(True)
-        else:
-            # Automatyczne "odkliknięcie" obu przycisków po wymazaniu ścieżki
-            self.dlg.radio_shp.setChecked(False)
-            self.dlg.radio_gpkg.setChecked(False)
+    def przelacz_widocznosc_sciezki(self):
+        """A function defining the visibility of the output folder widget."""
+        czy_zapis_na_dysk = self.dlg.radio_shp.isChecked() or self.dlg.radio_gpkg.isChecked()
+        self.dlg.widget_folder.setVisible(czy_zapis_na_dysk)
+        self.dlg.adjustSize()   # dostosowanie rozmiaru okna po ukryciu/pokazaniu widżetu ze ścieżką zapisu
 
     def run(self):
         """Run method that performs all the real work"""
-
         if self.first_start == True or not self.dlg.isVisible():
             self.first_start = False
             self.dlg = ObszaryChronioneDialog(self.iface.mainWindow())
 
-            # Ustawienie możliwych formatów dla warstwy wejściowej
+            # Ograniczenie możliwych formatów dla warstwy wejściowej
             try:
                 filtry = (Qgis.LayerFilter.PointLayer |
                           Qgis.LayerFilter.LineLayer |
@@ -229,8 +212,12 @@ class ObszaryChronione:
             self.dlg.combo_warstwa_wejsciowa.setFilters(filtry)
 
             self.dlg.push_uruchom.clicked.connect(self.uruchom_obliczenia)
-            self.dlg.filewidget_folder.fileChanged.connect(self.aktualizuj_przyciski_radio)
-            self.aktualizuj_przyciski_radio(self.dlg.filewidget_folder.filePath())
+
+            self.dlg.radio_tymczas.toggled.connect(self.przelacz_widocznosc_sciezki)
+            self.dlg.radio_shp.toggled.connect(self.przelacz_widocznosc_sciezki)
+            self.dlg.radio_gpkg.toggled.connect(self.przelacz_widocznosc_sciezki)
+            self.przelacz_widocznosc_sciezki()
+
 
         # Pokazanie okna i zarządzanie minimalizacją
         if self.dlg.isMinimized():
@@ -248,9 +235,10 @@ class ObszaryChronione:
         odleglosc = self.dlg.spin_bufor.value() * 1000
         czy_podsumowanie = self.dlg.check_generuj_podsumowanie.isChecked()
         czy_przyciac = self.dlg.check_przytnij.isChecked()
-        sciezka_zapisu = self.dlg.filewidget_folder.filePath().strip()
         czy_shp = self.dlg.radio_shp.isChecked()
         czy_gpkg = self.dlg.radio_gpkg.isChecked()
+        czy_tymczas = self.dlg.radio_tymczas.isChecked()
+        sciezka_zapisu = self.dlg.filewidget_folder.filePath().strip()
 
         rozszerzenie = ".shp" if czy_shp else ".gpkg"
 
@@ -319,10 +307,19 @@ class ObszaryChronione:
             )
             return
 
-        if sciezka_zapisu:
+        if not czy_tymczas and not sciezka_zapisu:
+            self.iface.messageBar().pushMessage(
+                "Błąd",
+                "Wybierz folder zapisu dla warstw wynikowych!",
+                level=Qgis.MessageLevel.Critical,
+                duration=5
+            )
+            return
+
+        if not czy_tymczas and sciezka_zapisu:
             if not os.path.exists(sciezka_zapisu):
                 self.iface.messageBar().pushMessage(
-                    "Błąd zapisu",
+                    "Błąd",
                     f"Folder docelowy nie istnieje: {sciezka_zapisu}",
                     level=Qgis.MessageLevel.Critical,
                     duration=5
@@ -429,7 +426,6 @@ class ObszaryChronione:
                     nazwa_kol_pow = "Powierzchnia [ha]"
                     nazwa_kol_dyst = "Dystans [km]"
 
-                dane_wynikowe.addAttributes(warstwa_wfs.fields())
                 dane_wynikowe.addAttributes([
                     QgsField(nazwa_kol_pow, QVariant.Double),
                     QgsField(nazwa_kol_dyst, QVariant.Double)
@@ -475,8 +471,8 @@ class ObszaryChronione:
                 dane_wynikowe.addFeatures(obiekty_do_skopiowania)
                 warstwa_wynikowa.updateExtents()
 
-                if not sciezka_zapisu:
-                    QgsProject.instance().addMapLayer(warstwa_wynikowa) # warstwy tymczasowe jeśli ścieżka jest pusta
+                if czy_tymczas:
+                    QgsProject.instance().addMapLayer(warstwa_wynikowa)
                 else:
                     options = QgsVectorFileWriter.SaveVectorOptions()
 
